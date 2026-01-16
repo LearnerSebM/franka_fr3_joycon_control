@@ -1,3 +1,6 @@
 [submodule "franka_ros2"]
 	path = franka_ros2
 	url = git@github.com:frankarobotics/franka_ros2.git
+[submodule "joycon-sdk"]
+	path = joycon-sdk
+	url = git@github.com:box2ai-robotics/joycon-robotics.git
