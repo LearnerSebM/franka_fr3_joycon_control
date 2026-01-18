@@ -1,0 +1,8 @@
+<library path="franka_joycon_controller">
+    <class name="franka_joycon_controller/FrankaJoyconController"
+           type="franka_joycon_controller::FrankaJoyconController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The franka joycon controller
+        </description>
+    </class>
+</library>
