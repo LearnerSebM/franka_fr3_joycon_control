@@ -5,6 +5,11 @@
 #include <cmath>
 #include <exception>
 #include <string>
+#include <array>
+
+#include <franka/robot.h>
+#include <franka/exception.h>
+#include "../../../franka_ros2/libfranka/examples/examples_common.h"
 
 namespace franka_joycon_controller {
 
@@ -31,6 +36,13 @@ controller_interface::return_type FrankaJoyconController::update(
     const rclcpp::Time& /*time*/,
     const rclcpp::Duration& /*period*/) {
   if (initialization_flag_) {
+    RCLCPP_INFO(get_node()->get_logger(), "Calling reset_robot with IP: %s", robot_ip_.c_str());
+    if (reset_robot(robot_ip_)) {
+      RCLCPP_INFO(get_node()->get_logger(), "Robot reset to home position successful.");
+    } else {
+      RCLCPP_WARN(get_node()->get_logger(), "Robot reset to home position failed.");
+    }
+
     std::tie(orientation_, position_) =
         franka_cartesian_pose_->getCurrentOrientationAndTranslation();
     initial_robot_time_ = state_interfaces_.back().get_value();
@@ -106,6 +118,9 @@ CallbackReturn FrankaJoyconController::on_configure(
 
   arm_id_ = robot_utils::getRobotNameFromDescription(robot_description_, get_node()->get_logger());
 
+  robot_ip_ = "172.16.0.2";
+  RCLCPP_INFO(get_node()->get_logger(), "Using robot_ip: %s", robot_ip_.c_str());
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -124,6 +139,21 @@ controller_interface::CallbackReturn FrankaJoyconController::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   franka_cartesian_pose_->release_interfaces();
   return CallbackReturn::SUCCESS;
+}
+
+bool reset_robot(const std::string& robot_ip) {
+  try {
+    franka::Robot robot(robot_ip);
+    setDefaultBehavior(robot);
+
+    std::array<double, 7> q_goal = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    MotionGenerator motion_generator(0.5, q_goal);
+    robot.control(motion_generator);
+
+    return true;
+  } catch (const franka::Exception& e) {
+    return false;
+  }
 }
 
 }  // namespace franka_joycon_controller
