@@ -208,7 +208,7 @@ def generate_launch_description():
         DeclareLaunchArgument('controllers_yaml',
                               default_value=PathJoinSubstitution(
                                 [
-                                    FindPackageShare('franka_bringup'),
+                                    FindPackageShare('joycon_control_bringup'),
                                     'config',
                                     "controllers.yaml"
                                 ]),

@@ -56,8 +56,8 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 # Add the path to the `utils` folder
-package_share = get_package_share_directory('franka_bringup')
-utils_path = os.path.join(package_share, '..', '..', 'lib', 'franka_bringup', 'utils')
+package_share = get_package_share_directory('joycon_control_bringup')
+utils_path = os.path.join(package_share, '..', '..', 'lib', 'joycon_control_bringup', 'utils')
 sys.path.append(os.path.abspath(utils_path))
 
 from launch_utils import load_yaml  # noqa: E402
