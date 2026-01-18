@@ -25,13 +25,11 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(Franka 0.13.2 REQUIRED)
 
 add_library(
         ${PROJECT_NAME}
         SHARED
         src/franka_joycon_controller.cpp
-        ../../franka_ros2/libfranka/examples/examples_common.cpp
 )
 target_include_directories(
         ${PROJECT_NAME}
@@ -39,7 +37,6 @@ target_include_directories(
         include
         ${EIGEN3_INCLUDE_DIRS}
 )
-target_link_libraries(${PROJECT_NAME} Franka::Franka)
 ament_target_dependencies(
         ${PROJECT_NAME}
         controller_interface
@@ -52,7 +49,6 @@ ament_target_dependencies(
         rclcpp
         rclcpp_lifecycle
         std_srvs
-        Franka
 )
 
 pluginlib_export_plugin_description_file(

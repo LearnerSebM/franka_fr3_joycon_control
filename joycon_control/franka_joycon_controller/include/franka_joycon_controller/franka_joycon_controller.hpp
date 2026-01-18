@@ -9,10 +9,6 @@
 #include <franka_example_controllers/robot_utils.hpp>
 #include <franka_semantic_components/franka_cartesian_pose_interface.hpp>
 
-namespace franka {
-class Robot;
-}
-
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 namespace franka_joycon_controller {
@@ -47,14 +43,6 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   double robot_time_{0.0};
   std::string robot_description_;
   std::string arm_id_;
-  std::string robot_ip_;
 };
-
-bool reset_robot(const std::string& robot_ip);
-/**
- * reset the robot to the initial joint configuration
- * @param robot_ip the IP address or hostname of the robot
- * @return true if successful, false otherwise
- */
 
 }  // namespace franka_joycon_controller
