@@ -42,6 +42,9 @@
         state_interfaces:
           robot_state
 
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+
 
 /**:
   franka_joycon_controller:
