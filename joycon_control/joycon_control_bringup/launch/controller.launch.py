@@ -97,19 +97,36 @@ def generate_robot_nodes(context):
                 }.items(),
             )
         )
+
+        # spawn robot_reset_controller
         nodes.append(
             Node(
                 package='controller_manager',
                 executable='spawner',
                 namespace=namespace,
-                arguments=[controller_name, '--controller-manager-timeout', '30'],
+                arguments=['robot_reset_controller', '--controller-manager-timeout', '30'],
                 parameters=[PathJoinSubstitution([
                     FindPackageShare('joycon_control_bringup'), 'config', "controllers.yaml",
-
                 ])],
                 output='screen',
             )
         )
+        # witchController node
+        nodes.append(
+            Node(
+                package='joycon_control_bringup',
+                executable='switch_controller',
+                namespace=namespace,
+                parameters=[{
+                    'namespace': namespace,
+                    'reset_controller_name': 'robot_reset_controller',
+                    'target_controller_name': controller_name,
+                    'check_interval': 0.5,
+                }],
+                output='screen',
+            )
+        )
+
     if any(str(config.get('use_rviz', 'false')).lower() == 'true' for config in configs.values()):
         nodes.append(
             Node(

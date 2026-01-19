@@ -30,6 +30,7 @@ add_library(
         ${PROJECT_NAME}
         SHARED
         src/franka_joycon_controller.cpp
+        src/robot_reset_controller.cpp
 )
 target_include_directories(
         ${PROJECT_NAME}

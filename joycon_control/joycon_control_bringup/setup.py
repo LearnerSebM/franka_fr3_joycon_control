@@ -32,6 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'switch_controller = joycon_control_bringup.switch_controller_node:main',
         ],
     },
 )

@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_srvs.srv import Trigger
+from controller_manager_msgs.srv import SwitchController
+from builtin_interfaces.msg import Duration
+
+
+class SwitchControllerNode(Node):
+    def __init__(self):
+        super().__init__('switch_controller')
+        
+        # Declare parameters
+        self.declare_parameter('namespace', '')
+        self.declare_parameter('reset_controller_name', 'robot_reset_controller')
+        self.declare_parameter('target_controller_name', 'franka_joycon_controller')
+        self.declare_parameter('check_interval', 0.5)  # seconds
+        
+        namespace = self.get_parameter('namespace').get_parameter_value().string_value
+        reset_controller_name = self.get_parameter('reset_controller_name').get_parameter_value().string_value
+        target_controller_name = self.get_parameter('target_controller_name').get_parameter_value().string_value
+        check_interval = self.get_parameter('check_interval').get_parameter_value().double_value
+        
+        # Build service names with namespace
+        # Controller services are under controller name node
+        if namespace:
+            reset_status_service = f'/{namespace}/robot_reset_controller/robot_reset_status'
+            switch_controller_service = f'/{namespace}/controller_manager/switch_controller'
+        else:
+            reset_status_service = '/robot_reset_controller/robot_reset_status'
+            switch_controller_service = '/controller_manager/switch_controller'
+        
+        # Create clients
+        self.reset_status_client = self.create_client(Trigger, reset_status_service)
+        self.switch_controller_client = self.create_client(SwitchController, switch_controller_service)
+        
+        self.reset_controller_name = reset_controller_name
+        self.target_controller_name = target_controller_name
+        self.switched = False
+        
+        # Wait for services
+        self.get_logger().info(f'Waiting for service: {reset_status_service}')
+        self.reset_status_client.wait_for_service(timeout_sec=10.0)
+        self.get_logger().info(f'Waiting for service: {switch_controller_service}')
+        self.switch_controller_client.wait_for_service(timeout_sec=10.0)
+        
+        # Create timer to check reset status
+        self.timer = self.create_timer(check_interval, self.check_reset_status)
+        self.get_logger().info('SwitchController started, monitoring reset status...')
+    
+    def check_reset_status(self):
+        if self.switched:
+            return
+        
+        request = Trigger.Request()
+        future = self.reset_status_client.call_async(request)
+        future.add_done_callback(self.reset_status_callback)
+    
+    def reset_status_callback(self, future):
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info('Reset completed, switching controllers...')
+                self.switch_controllers()
+        except Exception as e:
+            self.get_logger().error(f'Error checking reset status: {e}')
+    
+    def switch_controllers(self):
+        if self.switched:
+            return
+        
+        request = SwitchController.Request()
+        request.activate_controllers = [self.target_controller_name]
+        request.deactivate_controllers = [self.reset_controller_name]
+        request.strictness = SwitchController.Request.BEST_EFFORT
+        request.activate_asap = True
+        timeout_duration = Duration()
+        timeout_duration.sec = 5
+        timeout_duration.nanosec = 0
+        request.timeout = timeout_duration
+        
+        future = self.switch_controller_client.call_async(request)
+        future.add_done_callback(self.switch_controller_callback)
+    
+    def switch_controller_callback(self, future):
+        try:
+            response = future.result()
+            if response.ok:
+                self.get_logger().info('Controllers switched successfully')
+                self.switched = True
+                self.timer.cancel()
+            else:
+                self.get_logger().error(f'Failed to switch controllers: {response}')
+        except Exception as e:
+            self.get_logger().error(f'Error switching controllers: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SwitchControllerNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+

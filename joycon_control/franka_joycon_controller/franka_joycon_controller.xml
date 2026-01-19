@@ -5,4 +5,10 @@
             The franka joycon controller
         </description>
     </class>
+    <class name="franka_joycon_controller/RobotResetController"
+           type="franka_joycon_controller::RobotResetController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The robot reset controller that moves the robot to start position
+        </description>
+    </class>
 </library>
