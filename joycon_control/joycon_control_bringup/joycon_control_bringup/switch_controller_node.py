@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Trigger
-from controller_manager_msgs.srv import SwitchController
+from controller_manager_msgs.srv import SwitchController, LoadController
 from builtin_interfaces.msg import Duration
 
 
@@ -27,13 +27,16 @@ class SwitchControllerNode(Node):
         if namespace:
             reset_status_service = f'/{namespace}/robot_reset_status'
             switch_controller_service = f'/{namespace}/controller_manager/switch_controller'
+            load_controller_service = f'/{namespace}/controller_manager/load_controller'
         else:
-            reset_status_service = '/robot_reset_controller/robot_reset_status'
+            reset_status_service = '/robot_reset_status'
             switch_controller_service = '/controller_manager/switch_controller'
+            load_controller_service = '/controller_manager/load_controller'
         
         # Create clients
         self.reset_status_client = self.create_client(Trigger, reset_status_service)
         self.switch_controller_client = self.create_client(SwitchController, switch_controller_service)
+        self.load_controller_client = self.create_client(LoadController, load_controller_service)
         
         self.reset_controller_name = reset_controller_name
         self.target_controller_name = target_controller_name
@@ -42,6 +45,8 @@ class SwitchControllerNode(Node):
         # Wait for services
         self.get_logger().info(f'Waiting for service: {reset_status_service}')
         self.reset_status_client.wait_for_service(timeout_sec=10.0)
+        self.get_logger().info(f'Waiting for service: {load_controller_service}')
+        self.load_controller_client.wait_for_service(timeout_sec=10.0)
         self.get_logger().info(f'Waiting for service: {switch_controller_service}')
         self.switch_controller_client.wait_for_service(timeout_sec=10.0)
         
@@ -61,12 +66,36 @@ class SwitchControllerNode(Node):
         try:
             response = future.result()
             if response.success:
-                self.get_logger().info(f'Reset completed (message: {response.message}), switching controllers...')
-                self.switch_controllers()
+                self.get_logger().info(f'Reset completed (message: {response.message}), loading target controller...')
+                self.load_target_controller()
             else:
                 self.get_logger().debug(f'Reset not completed yet (message: {response.message})')
         except Exception as e:
             self.get_logger().error(f'Error checking reset status: {e}')
+    
+    def load_target_controller(self):
+        """Load the target controller before switching."""
+        if self.switched:
+            return
+        
+        request = LoadController.Request()
+        request.name = self.target_controller_name
+        
+        self.get_logger().info(f'Loading controller: {self.target_controller_name}')
+        future = self.load_controller_client.call_async(request)
+        future.add_done_callback(self.load_controller_callback)
+    
+    def load_controller_callback(self, future):
+        """Callback for load controller service."""
+        try:
+            response = future.result()
+            if response.ok:
+                self.get_logger().info(f'Successfully loaded {self.target_controller_name}, switching controllers...')
+                self.switch_controllers()
+            else:
+                self.get_logger().error(f'Failed to load {self.target_controller_name}: {response}')
+        except Exception as e:
+            self.get_logger().error(f'Error loading controller: {e}')
     
     def switch_controllers(self):
         if self.switched:
