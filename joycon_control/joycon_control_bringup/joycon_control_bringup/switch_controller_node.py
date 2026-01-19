@@ -36,7 +36,7 @@ class SwitchControllerNode(Node):
             switch_srv = '/controller_manager/switch_controller'
         
         # create clients
-        self.reset_status_client = self.create_client(Trigger, reset_status_srv)
+        self.reset_status_cli = self.create_client(Trigger, reset_status_srv)
         self.load_cli = self.create_client(LoadController, load_srv)
         self.configure_cli = self.create_client(ConfigureController, configure_srv)
         self.switch_cli = self.create_client(SwitchController, switch_srv)
@@ -48,7 +48,7 @@ class SwitchControllerNode(Node):
         
         # wait for services
         self.get_logger().info(f'Waiting for service: {reset_status_srv}')
-        self.reset_status_client.wait_for_service(timeout_sec=10.0)
+        self.reset_status_cli.wait_for_service(timeout_sec=10.0)
         self.get_logger().info(f'Waiting for service: {load_srv}')
         self.load_cli.wait_for_service(timeout_sec=10.0)
         self.get_logger().info(f'Waiting for service: {configure_srv}')
@@ -65,7 +65,7 @@ class SwitchControllerNode(Node):
             return
         
         req = Trigger.Request()
-        future = self.reset_cli.call_async(req)
+        future = self.reset_status_cli.call_async(req)
         future.add_done_callback(self.reset_callback)
     
     def reset_callback(self, future):
