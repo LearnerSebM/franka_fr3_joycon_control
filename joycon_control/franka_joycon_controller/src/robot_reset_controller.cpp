@@ -127,6 +127,12 @@ CallbackReturn RobotResetController::on_activate(
   return CallbackReturn::SUCCESS;
 }
 
+controller_interface::CallbackReturn RobotResetController::on_deactivate(
+    const rclcpp_lifecycle::State& /*previous_state*/) {
+  motion_generator_.reset();
+  return CallbackReturn::SUCCESS;
+}
+
 void RobotResetController::updateJointStates() {
   for (auto i = 0; i < num_joints; ++i) {
     const auto& position_interface = state_interfaces_.at(2 * i);

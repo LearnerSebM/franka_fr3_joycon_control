@@ -27,6 +27,7 @@ class RobotResetController : public controller_interface::ControllerInterface {
   CallbackReturn on_init() override;
   CallbackReturn on_configure(const rclcpp_lifecycle::State& previous_state) override;
   CallbackReturn on_activate(const rclcpp_lifecycle::State& previous_state) override;
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
  private:
   std::string arm_id_;

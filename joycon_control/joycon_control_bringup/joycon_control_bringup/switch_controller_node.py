@@ -5,6 +5,7 @@ from rclpy.node import Node
 from std_srvs.srv import Trigger
 from controller_manager_msgs.srv import SwitchController, LoadController, ConfigureController
 from builtin_interfaces.msg import Duration
+import time
 
 
 class SwitchControllerNode(Node):
@@ -43,6 +44,7 @@ class SwitchControllerNode(Node):
         
         self.reset_controller_name = reset_controller_name
         self.target_controller_name = target_controller_name
+        self.reset_rcv = False  # flag to check if reset_status response is received
         self.switched = False
         
         # Wait for services
@@ -70,8 +72,11 @@ class SwitchControllerNode(Node):
     def reset_status_callback(self, future):
         try:
             response = future.result()
-            if response.success:
+            if response.success and not self.reset_rcv:
                 self.get_logger().info(f'Reset completed (message: {response.message}), loading target controller...')
+                time.sleep(1.0)
+                # sleep incase the robot is still in "Idle" mode which is not ready to move
+                self.reset_rcv = True
                 self.load_target_controller()
             else:
                 self.get_logger().debug(f'Reset not completed yet (message: {response.message})')
