@@ -25,7 +25,7 @@ class SwitchControllerNode(Node):
         # Build service names with namespace
         # Controller services are under controller name node
         if namespace:
-            reset_status_service = f'/{namespace}/robot_reset_controller/robot_reset_status'
+            reset_status_service = f'/{namespace}/robot_reset_status'
             switch_controller_service = f'/{namespace}/controller_manager/switch_controller'
         else:
             reset_status_service = '/robot_reset_controller/robot_reset_status'
@@ -61,8 +61,10 @@ class SwitchControllerNode(Node):
         try:
             response = future.result()
             if response.success:
-                self.get_logger().info('Reset completed, switching controllers...')
+                self.get_logger().info(f'Reset completed (message: {response.message}), switching controllers...')
                 self.switch_controllers()
+            else:
+                self.get_logger().debug(f'Reset not completed yet (message: {response.message})')
         except Exception as e:
             self.get_logger().error(f'Error checking reset status: {e}')
     
