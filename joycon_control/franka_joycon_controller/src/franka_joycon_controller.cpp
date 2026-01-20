@@ -121,7 +121,7 @@ void FrankaJoyconController::joyconCommandCallback(const custom_msgs::msg::Joyco
   // x_cartesian[6]: [x, y, z, roll, pitch, yaw]
   if (msg->x_cartesian.size() >= 6) {
     // position: [x, y, z] (offset from initial position)
-    joycon_position_ = Eigen::Vector3d(
+    joycon_pos_ = Eigen::Vector3d(
       msg->x_cartesian[0],
       msg->x_cartesian[1],
       msg->x_cartesian[2]
@@ -132,7 +132,7 @@ void FrankaJoyconController::joyconCommandCallback(const custom_msgs::msg::Joyco
     double pitch = msg->x_cartesian[4];
     double yaw = msg->x_cartesian[5];
     
-    joycon_orientation_ = eulerToQuaternion(roll, pitch, yaw);
+    joycon_ort_ = eulerToQuaternion(roll, pitch, yaw);
     joycon_command_received_ = true;
   }
 }
@@ -145,7 +145,8 @@ controller_interface::return_type FrankaJoyconController::update(
         franka_cartesian_pose_->getCurrentOrientationAndTranslation();
 
     initial_robot_time_ = state_interfaces_.back().get_value();
-    init_position_ = position_;
+    new_pos_ = init_pos_;
+    new_ort_ = orientation_;
     elapsed_time_ = 0.0;
     initialization_flag_ = false;
   } else {
@@ -154,23 +155,15 @@ controller_interface::return_type FrankaJoyconController::update(
   }
   update_joint_states();
 
-  Eigen::Vector3d target_position = position_;
-  Eigen::Quaterniond target_orientation = orientation_;
 
-  {
-    std::lock_guard<std::mutex> lock(joycon_command_mutex_);
-    if (joycon_command_received_) {
-      target_position = init_position_ + joycon_position_;
-      target_orientation = joycon_orientation_;
-    } else {
-      // joycon command not received, keep current position and orientation
-      target_position = position_;
-      target_orientation = orientation_;
-    }
+  std::lock_guard<std::mutex> lock(joycon_command_mutex_);
+  if (joycon_command_received_) {
+    new_pos_ = init_pos_ + joycon_pos_;
+    new_ort_ = joycon_ort_;
   }
-
+  
   auto service_request =
-      create_ik_service_request(target_position, target_orientation, joint_positions_current_,
+      create_ik_service_request(new_pos_, new_ort_, joint_positions_current_,
                                 joint_velocities_current_, joint_efforts_current_);
 
   using ServiceResponseFuture = rclcpp::Client<moveit_msgs::srv::GetPositionIK>::SharedFuture;
