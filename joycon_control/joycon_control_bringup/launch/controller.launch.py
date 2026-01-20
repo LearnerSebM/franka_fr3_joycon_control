@@ -49,7 +49,7 @@ import os
 import sys
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -77,6 +77,65 @@ def generate_robot_nodes(context):
     nodes = []
     for item_name, config in configs.items():
         namespace = config['namespace']
+
+
+        # 使用 conda 环境中的 Python 来运行 joycon_publisher
+        # 获取 conda 环境的 Python 路径
+        conda_env_path = os.environ.get('CONDA_PREFIX', '')
+        if conda_env_path:
+            python_executable = os.path.join(conda_env_path, 'bin', 'python')
+        else:
+            # 如果没有激活 conda 环境，尝试使用常见的 conda 环境路径
+            conda_base = os.environ.get('CONDA_DEFAULT_ENV', 'joycon')
+            possible_paths = [
+                os.path.expanduser(f'~/Tools/miniforge3/envs/{conda_base}/bin/python'),
+                os.path.expanduser(f'~/anaconda3/envs/{conda_base}/bin/python'),
+                os.path.expanduser(f'~/miniconda3/envs/{conda_base}/bin/python'),
+            ]
+            python_executable = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    python_executable = path
+                    break
+            
+            if python_executable is None:
+                # 如果找不到，回退到系统 Python，但会显示警告
+                python_executable = '/usr/bin/python3'
+                print(f"警告: 未找到 conda 环境，使用系统 Python: {python_executable}")
+        
+        # 获取 joycon_publisher entry point 脚本路径
+        # entry_points 脚本在 install/lib/package_name/ 目录下
+        # 使用 ament_index 获取包路径，然后构建脚本路径
+        from ament_index_python.packages import get_package_share_directory
+        joycon_wrapper_share = get_package_share_directory('joycon_wrapper')
+        # 从 share/joycon_wrapper 回到 install 目录，然后到 lib/joycon_wrapper/joycon_publisher
+        install_base = os.path.dirname(os.path.dirname(joycon_wrapper_share))
+        entry_point_script = os.path.join(
+            install_base, 'lib', 'joycon_wrapper', 'joycon_publisher'
+        )
+        entry_point_script = os.path.abspath(entry_point_script)
+        
+        # 如果脚本存在，使用脚本；否则使用模块方式
+        if os.path.exists(entry_point_script):
+            cmd = [python_executable, entry_point_script]
+        else:
+            # 使用 Python 模块方式运行
+            cmd = [python_executable, '-m', 'joycon_wrapper.joycon_publisher']
+        
+        # 添加 ROS2 命名空间参数
+        # 确保命名空间以 / 开头（完全限定名称）
+        ns = namespace if namespace.startswith('/') else f'/{namespace}'
+        cmd.extend(['--ros-args', '-r', f'__ns:={ns}', '-r', '__node:=joycon_publisher'])
+        
+        nodes.append(
+            ExecuteProcess(
+                cmd=cmd,
+                name='joycon_publisher',
+                output='screen',
+                env=os.environ.copy(),
+            )
+        )
+        
         nodes.append(
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -97,6 +156,7 @@ def generate_robot_nodes(context):
                 }.items(),
             )
         )
+
 
         # spawn robot_reset_controller
         nodes.append(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 
 #include <Eigen/Dense>
 #include <controller_interface/controller_interface.hpp>
@@ -8,6 +9,7 @@
 
 #include <franka_example_controllers/robot_utils.hpp>
 #include <franka_semantic_components/franka_cartesian_pose_interface.hpp>
+#include <custom_msgs/msg/joycon_command.hpp>
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -43,6 +45,20 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   double robot_time_{0.0};
   std::string robot_description_;
   std::string arm_id_;
-};
+
+  // Joycon command subscription
+  rclcpp::Subscription<custom_msgs::msg::JoyconCommand>::SharedPtr joycon_command_subscriber_;
+  std::mutex joycon_command_mutex_;
+  bool joycon_command_received_{false};
+  Eigen::Vector3d joycon_position_{0.0, 0.0, 0.0};  // 初始化为零（增量位置）
+  Eigen::Quaterniond joycon_orientation_{1.0, 0.0, 0.0, 0.0};  // 初始化为单位四元数
+
+  // Helper function to convert roll, pitch, yaw to quaternion
+  Eigen::Quaterniond eulerToQuaternion(double roll, double pitch, double yaw);
+  
+  // Callback for joycon command
+  void joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg);
+
+};  // class FrankaJoyconController
 
 }  // namespace franka_joycon_controller

@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'joycon_publisher = joycon_wrapper.joycon_publisher:main',
         ],
     },
 )

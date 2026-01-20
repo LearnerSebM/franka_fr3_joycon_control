@@ -1,10 +1,12 @@
 #include <franka_joycon_controller/franka_joycon_controller.hpp>
-#include <franka_example_controllers/default_robot_behavior_utils.hpp>
 
 #include <cassert>
 #include <cmath>
 #include <exception>
 #include <string>
+
+#include <custom_msgs/msg/joycon_command.hpp>
+#include <franka_example_controllers/default_robot_behavior_utils.hpp>
 
 namespace franka_joycon_controller {
 
@@ -27,6 +29,46 @@ FrankaJoyconController::state_interface_configuration() const {
   return config;
 }
 
+Eigen::Quaterniond FrankaJoyconController::eulerToQuaternion(double roll, double pitch, double yaw) {
+  // 将欧拉角 (roll, pitch, yaw) 转换为四元数
+  // 使用 ZYX 顺序（固定轴旋转，ROS 标准约定）
+  // 旋转顺序：先绕 Z 轴旋转 yaw，再绕 Y 轴旋转 pitch，最后绕 X 轴旋转 roll
+  // 四元数乘法从右到左应用，所以顺序是：q = q_yaw * q_pitch * q_roll
+  Eigen::AngleAxisd roll_angle(roll, Eigen::Vector3d::UnitX());
+  Eigen::AngleAxisd pitch_angle(pitch, Eigen::Vector3d::UnitY());
+  Eigen::AngleAxisd yaw_angle(yaw, Eigen::Vector3d::UnitZ());
+  
+  // ZYX 顺序：yaw * pitch * roll（从右到左应用）
+  Eigen::Quaterniond q = yaw_angle * pitch_angle * roll_angle;
+  
+  // 确保四元数归一化
+  q.normalize();
+  
+  return q;
+}
+
+void FrankaJoyconController::joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(joycon_command_mutex_);
+  
+  // x_cartesian[6] 格式: [x, y, z, roll, pitch, yaw]
+  if (msg->x_cartesian.size() >= 6) {
+    // 位置: [x, y, z] (单位: 米)
+    joycon_position_ = Eigen::Vector3d(
+      msg->x_cartesian[0],
+      msg->x_cartesian[1],
+      msg->x_cartesian[2]
+    );
+    
+    // 姿态: [roll, pitch, yaw] (单位: 弧度)
+    double roll = msg->x_cartesian[3];
+    double pitch = msg->x_cartesian[4];
+    double yaw = msg->x_cartesian[5];
+    
+    joycon_orientation_ = eulerToQuaternion(roll, pitch, yaw);
+    joycon_command_received_ = true;
+  }
+}
+
 controller_interface::return_type FrankaJoyconController::update(
     const rclcpp::Time& /*time*/,
     const rclcpp::Duration& /*period*/) {
@@ -42,21 +84,33 @@ controller_interface::return_type FrankaJoyconController::update(
     elapsed_time_ = robot_time_ - initial_robot_time_;
   }
 
-  double angle_ort = M_PI / 8 * (1 - std::cos(M_PI / 5.0 * elapsed_time_));
-  double radius = 0.1;
-  double angle_pos = M_PI / 4 * (1 - std::cos(M_PI / 5.0 * elapsed_time_));
-  double delta_x = radius * std::sin(angle_pos);
-  double delta_z = radius * (std::cos(angle_pos) - 1);
-
   Eigen::Quaterniond new_orientation;
   Eigen::Vector3d new_position;
 
-  new_position = position_;
-  new_orientation = orientation_;
-
-  new_position(0) -= delta_x;
-  new_position(2) -= delta_z;
-  new_orientation = Eigen::AngleAxisd(angle_ort, Eigen::Vector3d::UnitX()) * new_orientation;
+  // 检查是否收到 joycon 命令
+  {
+    std::lock_guard<std::mutex> lock(joycon_command_mutex_);
+    if (joycon_command_received_) {
+      // 使用 joycon 命令
+      new_position += joycon_position_;
+      new_orientation = joycon_orientation_;
+      
+      // 输出日志：显示收到的命令值
+      RCLCPP_INFO_THROTTLE(
+        get_node()->get_logger(), 
+        *get_node()->get_clock(),
+        500,  // 每500ms输出一次，避免日志过多
+        "收到了 joycon 命令 - 位置增量: [%.4f, %.4f, %.4f] m, 姿态四元数: [%.4f, %.4f, %.4f, %.4f]",
+        joycon_position_.x(), joycon_position_.y(), joycon_position_.z(),
+        joycon_orientation_.w(), joycon_orientation_.x(), 
+        joycon_orientation_.y(), joycon_orientation_.z()
+      );
+    } else {
+      // 如果没有收到 joycon 命令，使用初始位置和姿态（保持不动）
+      new_position = position_;
+      new_orientation = orientation_;
+    }
+  }
 
   if (franka_cartesian_pose_->setCommand(new_orientation, new_position)) {
     return controller_interface::return_type::OK;
@@ -105,6 +159,13 @@ CallbackReturn FrankaJoyconController::on_configure(
   }
 
   arm_id_ = robot_utils::getRobotNameFromDescription(robot_description_, get_node()->get_logger());
+
+  // 创建 joycon 命令订阅者
+  joycon_command_subscriber_ = get_node()->create_subscription<custom_msgs::msg::JoyconCommand>(
+      "joycon_command", 10,
+      std::bind(&FrankaJoyconController::joyconCommandCallback, this, std::placeholders::_1));
+  
+  RCLCPP_INFO(get_node()->get_logger(), "Joycon command subscriber created.");
 
   return CallbackReturn::SUCCESS;
 }

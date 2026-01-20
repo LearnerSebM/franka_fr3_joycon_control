@@ -15,6 +15,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(controller_interface REQUIRED)
+find_package(custom_msgs REQUIRED)
 find_package(franka_example_controllers REQUIRED)
 find_package(franka_msgs REQUIRED)
 find_package(franka_semantic_components REQUIRED)
@@ -41,6 +42,7 @@ target_include_directories(
 ament_target_dependencies(
         ${PROJECT_NAME}
         controller_interface
+        custom_msgs
         franka_example_controllers
         franka_msgs
         franka_semantic_components
