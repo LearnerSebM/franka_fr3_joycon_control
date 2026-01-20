@@ -29,7 +29,7 @@ FrankaJoyconController::state_interface_configuration() const {
   return config;
 }
 
-Eigen::Quaterniond FrankaJoyconController::eulerToQuaternion(double roll, double pitch, double yaw) {
+Eigen::AngleAxisd FrankaJoyconController::eulerToAngleAxis(double roll, double pitch, double yaw) {
   // 将欧拉角 (roll, pitch, yaw) 转换为四元数
   // 使用 ZYX 顺序（固定轴旋转，ROS 标准约定）
   // 旋转顺序：先绕 Z 轴旋转 yaw，再绕 Y 轴旋转 pitch，最后绕 X 轴旋转 roll
@@ -43,8 +43,9 @@ Eigen::Quaterniond FrankaJoyconController::eulerToQuaternion(double roll, double
   
   // 确保四元数归一化
   q.normalize();
+
+  return Eigen::AngleAxisd(q);
   
-  return q;
 }
 
 void FrankaJoyconController::joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg) {
@@ -64,7 +65,7 @@ void FrankaJoyconController::joyconCommandCallback(const custom_msgs::msg::Joyco
     double pitch = msg->x_cartesian[4];
     double yaw = msg->x_cartesian[5];
     
-    joycon_orientation_ = eulerToQuaternion(roll, pitch, yaw);
+    joycon_orientation_ = eulerToAngleAxis(roll, pitch, yaw);
     joycon_command_received_ = true;
   }
 }
@@ -95,23 +96,20 @@ controller_interface::return_type FrankaJoyconController::update(
       new_position += joycon_position_;
       new_orientation = joycon_orientation_;
       
-      // 输出日志：显示收到的命令值
-      RCLCPP_INFO_THROTTLE(
-        get_node()->get_logger(), 
-        *get_node()->get_clock(),
-        500,  // 每500ms输出一次，避免日志过多
-        "收到了 joycon 命令 - 位置增量: [%.4f, %.4f, %.4f] m, 姿态四元数: [%.4f, %.4f, %.4f, %.4f]",
-        joycon_position_.x(), joycon_position_.y(), joycon_position_.z(),
-        joycon_orientation_.w(), joycon_orientation_.x(), 
-        joycon_orientation_.y(), joycon_orientation_.z()
-      );
     } else {
       // 如果没有收到 joycon 命令，使用初始位置和姿态（保持不动）
       new_position = position_;
       new_orientation = orientation_;
     }
   }
-
+  // 输出日志：显示收到的命令值
+  RCLCPP_INFO(
+    get_node()->get_logger(), 
+    "Command Outpuy - 位置增量: [%.4f, %.4f, %.4f] m, AngleAxis: [%.4f, %.4f, %.4f, %.4f]",
+    new_position.x(), new_position.y(), new_position.z(),
+    new_orientation.w(), new_orientation.x(), 
+    new_orientation.y(), new_orientation.z()
+  );
   if (franka_cartesian_pose_->setCommand(new_orientation, new_position)) {
     return controller_interface::return_type::OK;
   } else {

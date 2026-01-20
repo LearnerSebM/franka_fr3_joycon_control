@@ -29,7 +29,7 @@ class JoyconPublisher(Node):
         )
         
         # 创建定时器，以 1000Hz 频率发布（周期 = 1/1000 = 0.001 秒）
-        timer_period = 0.0005  # 1ms = 1000Hz
+        timer_period = 0.001  # 1ms = 1000Hz
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
         self.get_logger().info(f'Joycon 发布者节点已启动，发布频率: {1.0/timer_period:.0f} Hz')
