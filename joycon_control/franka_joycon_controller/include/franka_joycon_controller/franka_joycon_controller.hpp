@@ -50,11 +50,12 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   rclcpp::Subscription<custom_msgs::msg::JoyconCommand>::SharedPtr joycon_command_subscriber_;
   std::mutex joycon_command_mutex_;
   bool joycon_command_received_{false};
-  Eigen::Vector3d joycon_position_;
-  Eigen::AngleAxisd joycon_orientation_;
+  Eigen::Vector3d init_position_;
+  Eigen::Vector3d joycon_position_{0.0, 0.0, 0.0};
+  Eigen::Quaterniond joycon_orientation_;
 
   // Helper function to convert roll, pitch, yaw to quaternion
-  Eigen::AngleAxisd eulerToAngleAxis(double roll, double pitch, double yaw);
+  Eigen::Quaterniond eulerToQuaternion(double roll, double pitch, double yaw);
   
   // Callback for joycon command
   void joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg);

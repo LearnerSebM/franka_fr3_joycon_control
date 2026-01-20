@@ -10,6 +10,8 @@ from custom_msgs.msg import JoyconCommand
 from std_msgs.msg import Header
 from joyconrobotics import JoyconRobotics
 
+import math
+
 
 class JoyconPublisher(Node):
     """Joycon 发布者节点"""
@@ -18,7 +20,9 @@ class JoyconPublisher(Node):
         super().__init__('joycon_publisher')
         
         # 初始化 joycon 控制器
-        self.joycon = JoyconRobotics("right")
+        self.joycon = JoyconRobotics(device="right",
+            offset_euler_rad=[-math.pi, 0, 0],
+            euler_reverse=[-1, 1, -1],)
         self.get_logger().info("成功连接到右侧 joycon")
         
         # 创建发布者，发布到 joycon_command 话题
@@ -56,6 +60,13 @@ class JoyconPublisher(Node):
                 
                 # 发布消息
                 self.publisher_.publish(msg)
+                
+                # # 输出消息到日志（每次发布都输出）
+                # self.get_logger().info(
+                #     f'发布消息 - 位姿: x={x:.4f}, y={y:.4f}, z={z:.4f}, '
+                #     f'roll={roll:.4f}, pitch={pitch:.4f}, yaw={yaw:.4f}, '
+                #     f'时间戳: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}'
+                # )
                 
             else:
                 self.get_logger().warn(f'收到的位姿数据长度不足: {len(pose)}, 需要 6 个值')
