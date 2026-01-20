@@ -1,28 +1,14 @@
-#  Copyright (c) 2025 Franka Robotics GmbH
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-
 ############################################################################
 # Parameters:
 # controller_name: Name of the controller to spawn (required, no default)
 # robot_config_file: Path to the robot configuration file to load
-#                   (default: franka.config.yaml in franka_bringup/config)
+#                   (default: franka.config.yaml in joycon_control_bringup/config)
 #
 # The example.launch.py launch file provides a flexible and unified interface
 # for launching Franka Robotics example controllers via the 'controller_name'
-# parameter, such as 'elbow_example_controller'.
+# parameter, such as 'franka_joycon_controller'.
 # Example:
-# ros2 launch franka_bringup example.launch.py controller_name:=elbow_example_controller
+# ros2 launch joycon_control_bringup franka_controller.launch.py controller_name:=franka_joycon_controller
 #
 # This script "includes" franka.launch.py to declare core component nodes,
 # including: robot_state_publisher, ros2_control_node, joint_state_publisher,
@@ -101,8 +87,6 @@ def generate_robot_nodes(context):
             )
         )
 
-
-        # spawn robot_reset_controller
         nodes.append(
             Node(
                 package='controller_manager',
@@ -115,7 +99,7 @@ def generate_robot_nodes(context):
                 output='screen',
             )
         )
-        # witchController node
+
         nodes.append(
             Node(
                 package='joycon_control_bringup',
