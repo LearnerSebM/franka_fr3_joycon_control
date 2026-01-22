@@ -4,17 +4,11 @@
 #include <cmath>
 #include <exception>
 #include <string>
-#include "fmt/format.h"
 
 #include <chrono>
 
 #include <custom_msgs/msg/joycon_command.hpp>
 #include <franka_example_controllers/default_robot_behavior_utils.hpp>
-
-#define RED "\033[1;31m"
-#define GREEN "\033[1;32m"
-#define YELLOW "\033[1;33m"
-#define RESET "\033[0m"
 
 using namespace std::chrono_literals;
 using Vector7d = Eigen::Matrix<double, 7, 1>;
@@ -243,123 +237,6 @@ bool FrankaJoyconController::assign_parameters() {
   return true;
 }
 
-void FrankaJoyconController::assignMoveGoalOptionsCallbacks() {
-  move_goal_options_.goal_response_callback =
-      [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Move>>&
-                 goal_handle) {
-        if (!goal_handle) {
-          RCLCPP_ERROR(get_node()->get_logger(),
-                       RED "Move Goal (i.e. open gripper) NOT accepted." RESET);
-        } else {
-          RCLCPP_INFO(get_node()->get_logger(), "Move Goal accepted");
-        }
-      };
-
-  move_goal_options_.feedback_callback =
-      [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Move>>&,
-             const std::shared_ptr<const franka_msgs::action::Move_Feedback>& feedback) {
-        // RCLCPP_INFO(get_node()->get_logger(), "Move Goal current_width [%f].",
-        //             feedback->current_width);
-      };
-
-  move_goal_options_.result_callback =
-      [this](
-          const rclcpp_action::ClientGoalHandle<franka_msgs::action::Move>::WrappedResult& result) {
-        RCLCPP_INFO(get_node()->get_logger(), "Move Goal result %s.",
-                    (rclcpp_action::ResultCode::SUCCEEDED == result.code ? YELLOW "SUCCESS" RESET
-                                                                         : RED "FAIL" RESET));
-        if (rclcpp_action::ResultCode::SUCCEEDED == result.code) {
-          toggleGripperState();
-        }
-      };
-}
-
-void FrankaJoyconController::assignGraspGoalOptionsCallbacks() {
-  grasp_goal_options_.goal_response_callback =
-      [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Grasp>>&
-                 goal_handle) {
-        if (!goal_handle) {
-          RCLCPP_ERROR(get_node()->get_logger(), RED "Grasp Goal NOT accepted." RESET);
-        } else {
-          RCLCPP_INFO(get_node()->get_logger(), "Grasp Goal accepted.");
-        }
-      };
-
-  grasp_goal_options_.feedback_callback =
-      [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Grasp>>&,
-             const std::shared_ptr<const franka_msgs::action::Grasp_Feedback>& feedback) {
-        // RCLCPP_INFO(get_node()->get_logger(), "Grasp Goal current_width: %f",
-        //             feedback->current_width);
-      };
-
-  grasp_goal_options_.result_callback =
-      [this](const rclcpp_action::ClientGoalHandle<franka_msgs::action::Grasp>::WrappedResult&
-                 result) {
-        RCLCPP_INFO(get_node()->get_logger(), "Grasp Goal result %s.",
-                    (rclcpp_action::ResultCode::SUCCEEDED == result.code ? GREEN "SUCCESS" RESET
-                                                                         : RED "FAIL" RESET));
-        toggleGripperState();
-      };
-}
-
-bool FrankaJoyconController::openGripper() {
-  RCLCPP_INFO(get_node()->get_logger(), "Opening the gripper - Submitting a Move Goal");
-
-  // define open gripper goal
-  franka_msgs::action::Move::Goal move_goal;
-  move_goal.width = 0.08;
-  move_goal.speed = 0.2;
-
-  std::shared_future<std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Move>>>
-      move_goal_handle =
-          gripper_move_action_client_->async_send_goal(move_goal, move_goal_options_);
-  bool ret = move_goal_handle.valid();
-  if (ret) {
-    RCLCPP_INFO(get_node()->get_logger(), "Submited a Move Goal");
-  } else {
-    RCLCPP_ERROR(get_node()->get_logger(), RED "Failed to submit a Move Goal" RESET);
-  }
-  return ret;
-}
-
-void FrankaJoyconController::graspGripper() {
-  RCLCPP_INFO(get_node()->get_logger(), "Closing the gripper - Submitting a Grasp Goal");
-
-  franka_msgs::action::Grasp::Goal grasp_goal;
-  grasp_goal.width = 0.035;
-  grasp_goal.speed = 0.05;
-  grasp_goal.force = 100.0;
-  grasp_goal.epsilon.inner = 0.030;  // 5mm or less == fail !
-  grasp_goal.epsilon.outer = 0.030;  // 65mm or more == fail !
-
-  std::shared_future<std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Grasp>>>
-      grasp_goal_handle =
-          gripper_grasp_action_client_->async_send_goal(grasp_goal, grasp_goal_options_);
-
-  bool ret = grasp_goal_handle.valid();
-  if (ret) {
-    RCLCPP_INFO(get_node()->get_logger(), "Submited a Grasp Goal");
-  } else {
-    RCLCPP_ERROR(get_node()->get_logger(), RED "Failed to submit a Grasp Goal" RESET);
-  }
-}
-
-void FrankaJoyconController::toggleGripperState() {
-  /*
-   * toggle the gripper state according to the received joycon command
-   */
-  enum ordered_state { open, closed };
-  static ordered_state ordered_gripper_state = ordered_state::closed;
-
-  if (ordered_gripper_state == ordered_state::closed) {
-    openGripper();
-    ordered_gripper_state = ordered_state::open;
-  } else {
-    graspGripper();
-    ordered_gripper_state = ordered_state::closed;
-  }
-}
-
 CallbackReturn FrankaJoyconController::on_configure(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   if (!assign_parameters()) {
@@ -415,28 +292,7 @@ CallbackReturn FrankaJoyconController::on_configure(
   
   RCLCPP_INFO(get_node()->get_logger(), "Joycon command subscriber created.");
 
-  // initialize gripper action clients
-  namespace_ = get_node()->get_namespace();
-  gripper_grasp_action_client_ = rclcpp_action::create_client<franka_msgs::action::Grasp>(
-      get_node(), fmt::format("{}/franka_gripper/grasp", namespace_));
-  gripper_move_action_client_ = rclcpp_action::create_client<franka_msgs::action::Move>(
-      get_node(), fmt::format("{}/franka_gripper/move", namespace_));
-  gripper_stop_client_ = get_node()->create_client<std_srvs::srv::Trigger>(
-      fmt::format("{}/franka_gripper/stop", namespace_));
-
-  assignMoveGoalOptionsCallbacks();
-  assignGraspGoalOptionsCallbacks();
-
-  if (!gripper_move_action_client_->wait_for_action_server(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Move Action server not available after waiting.");
-    return CallbackReturn::ERROR;
-  }
-  if (!gripper_grasp_action_client_->wait_for_action_server(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Grasp Action server not available after waiting.");
-    return CallbackReturn::ERROR;
-  }
   return CallbackReturn::SUCCESS;
-
 }
 
 CallbackReturn FrankaJoyconController::on_activate(
@@ -452,9 +308,6 @@ CallbackReturn FrankaJoyconController::on_activate(
   franka_cartesian_pose_->assign_loaned_state_interfaces(state_interfaces_);
   franka_robot_model_->assign_loaned_state_interfaces(state_interfaces_);
 
-  // toggle the gripper, initially we will order it to open
-  toggleGripperState();
-
   return CallbackReturn::SUCCESS;
 }
 
@@ -462,21 +315,6 @@ controller_interface::CallbackReturn FrankaJoyconController::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   franka_cartesian_pose_->release_interfaces();
   franka_robot_model_->release_interfaces();
-  
-  // stop the gripper
-  if (gripper_stop_client_->service_is_ready()) {
-    std_srvs::srv::Trigger::Request::SharedPtr request =
-        std::make_shared<std_srvs::srv::Trigger::Request>();
-    auto result = gripper_stop_client_->async_send_request(request);
-    if (result.get() && result.get()->success) {
-      RCLCPP_INFO(get_node()->get_logger(), "Gripper stopped successfully.");
-    } else {
-      RCLCPP_ERROR(get_node()->get_logger(), "Failed to stop gripper.");
-    }
-  } else {
-    RCLCPP_ERROR(get_node()->get_logger(), "Gripper stop service is not available.");
-  }
-  
   return CallbackReturn::SUCCESS;
 }
 

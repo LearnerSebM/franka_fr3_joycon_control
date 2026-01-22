@@ -23,11 +23,9 @@ find_package(hardware_interface REQUIRED)
 find_package(pinocchio REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(fmt REQUIRED)
 
 add_library(
         ${PROJECT_NAME}
@@ -52,14 +50,8 @@ ament_target_dependencies(
         pinocchio
         pluginlib
         rclcpp
-        rclcpp_action
         rclcpp_lifecycle
         std_srvs
-)
-
-target_link_libraries(
-        ${PROJECT_NAME}
-        fmt::fmt
 )
 
 pluginlib_export_plugin_description_file(
