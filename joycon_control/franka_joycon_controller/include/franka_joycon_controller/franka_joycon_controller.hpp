@@ -8,9 +8,13 @@
 #include <franka_example_controllers/robot_utils.hpp>
 #include <moveit_msgs/srv/get_position_ik.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 #include "franka_semantic_components/franka_cartesian_pose_interface.hpp"
 #include "franka_semantic_components/franka_robot_model.hpp"
 #include <custom_msgs/msg/joycon_command.hpp>
+#include <franka_msgs/action/grasp.hpp>
+#include <franka_msgs/action/move.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -37,6 +41,8 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
  private:
+
+  // functions for impedance_ik_controller
   void update_joint_states();
 
   /**
@@ -74,11 +80,22 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
    */
   Eigen::Quaterniond eulerToQuaternion(double roll, double pitch, double yaw);
   
+
+  // functions for gripper control
+  void toggleGripperState();
+  bool openGripper();
+  void graspGripper();
+  void assignMoveGoalOptionsCallbacks();
+  void assignGraspGoalOptionsCallbacks();
+
+  // function for joycon topic receiver
   /**
    * @brief Callback for joycon command
    */
   void joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg);
 
+
+  // variables for impedance_ik_controller
   std::unique_ptr<franka_semantic_components::FrankaCartesianPoseInterface> franka_cartesian_pose_;
 
   Eigen::Quaterniond orientation_;
@@ -119,6 +136,18 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   Eigen::Quaterniond joycon_ort_;
   Eigen::Vector3d new_pos_;
   Eigen::Quaterniond new_ort_;
+
+  
+  // variables for gripper control
+  std::shared_ptr<rclcpp_action::Client<franka_msgs::action::Move>> gripper_move_action_client_;
+  std::shared_ptr<rclcpp_action::Client<franka_msgs::action::Grasp>> gripper_grasp_action_client_;
+  std::shared_ptr<rclcpp::Client<std_srvs::srv::Trigger>> gripper_stop_client_;
+
+  rclcpp_action::Client<franka_msgs::action::Move>::SendGoalOptions move_goal_options_;
+  rclcpp_action::Client<franka_msgs::action::Grasp>::SendGoalOptions grasp_goal_options_;
+  
+  std::string namespace_;
+  
 };
 
 }  // namespace franka_joycon_controller
