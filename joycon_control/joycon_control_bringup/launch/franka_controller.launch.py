@@ -115,6 +115,21 @@ def generate_robot_nodes(context):
             )
         )
 
+        load_gripper = str(config.get('load_gripper', 'false')).lower() == 'true'
+        if load_gripper:
+            nodes.append(
+                Node(
+                    package='controller_manager',
+                    executable='spawner',
+                    namespace=namespace,
+                    arguments=['gripper_joycon_controller', '--controller-manager-timeout', '30'],
+                    parameters=[PathJoinSubstitution([
+                        FindPackageShare('joycon_control_bringup'), 'config', "controllers.yaml",
+                    ])],
+                    output='screen',
+                )
+            )
+
     if any(str(config.get('use_rviz', 'false')).lower() == 'true' for config in configs.values()):
         nodes.append(
             Node(

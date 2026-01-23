@@ -37,6 +37,9 @@
       franka_joycon_controller:
         type: franka_joycon_controller/FrankaJoyconController
 
+      gripper_joycon_controller:
+        type: franka_joycon_controller/GripperJoyconController
+
       robot_reset_controller:
         type: franka_joycon_controller/RobotResetController
 

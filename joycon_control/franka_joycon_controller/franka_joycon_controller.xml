@@ -5,6 +5,12 @@
             The franka joycon controller
         </description>
     </class>
+    <class name="franka_joycon_controller/GripperJoyconController"
+           type="franka_joycon_controller::GripperJoyconController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The gripper joycon controller
+        </description>
+    </class>
     <class name="franka_joycon_controller/RobotResetController"
            type="franka_joycon_controller::RobotResetController" base_class_type="controller_interface::ControllerInterface">
         <description>
