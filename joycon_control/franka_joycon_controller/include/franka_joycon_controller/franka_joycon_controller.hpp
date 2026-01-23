@@ -114,7 +114,6 @@ class FrankaJoyconController : public controller_interface::ControllerInterface 
   rclcpp::Subscription<custom_msgs::msg::JoyconCommand>::SharedPtr joycon_command_subscriber_;
   std::mutex joycon_command_mutex_;
   bool joycon_command_received_{false};
-  Eigen::Vector3d init_pos_{0.35, 0.0, 0.6};
   Eigen::Vector3d joycon_pos_{0.0, 0.0, 0.0};
   Eigen::Quaterniond joycon_ort_;
   Eigen::Vector3d new_pos_;

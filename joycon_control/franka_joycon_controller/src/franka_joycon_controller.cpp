@@ -145,8 +145,9 @@ controller_interface::return_type FrankaJoyconController::update(
         franka_cartesian_pose_->getCurrentOrientationAndTranslation();
 
     initial_robot_time_ = state_interfaces_.back().get_value();
-    new_pos_ = init_pos_;
+    new_pos_ = position_;
     new_ort_ = orientation_;
+    RCLCPP_INFO(get_node()->get_logger(), "Initial position: %f, %f, %f", position_.x(), position_.y(), position_.z());
     elapsed_time_ = 0.0;
     initialization_flag_ = false;
   } else {
@@ -158,7 +159,7 @@ controller_interface::return_type FrankaJoyconController::update(
 
   std::lock_guard<std::mutex> lock(joycon_command_mutex_);
   if (joycon_command_received_) {
-    new_pos_ = init_pos_ + joycon_pos_;
+    new_pos_ = position_ + joycon_pos_;
     new_ort_ = joycon_ort_;
   }
   
@@ -307,6 +308,19 @@ CallbackReturn FrankaJoyconController::on_activate(
 
   franka_cartesian_pose_->assign_loaned_state_interfaces(state_interfaces_);
   franka_robot_model_->assign_loaned_state_interfaces(state_interfaces_);
+
+  // get current joint_states when on_activate
+  /*
+  This fixes a bug caused by swtich_controller node:
+  In original franka_ros2 repo, whether the ‘load-gripper’ is true or false, 
+  the joint_impedance_with_ik_example_controller works fine.
+  However, in our case, the franka_joycon_controller is activated by switch_controller node,
+  and the robot moves to a position with a large offset.
+  This might be caused by the congestion of ros2 rescources in switch_controller node.
+  We fix this by manually setting the desired joint position to the current joint positions in on_active().
+  */
+  update_joint_states();
+  joint_positions_desired_ = joint_positions_current_;
 
   return CallbackReturn::SUCCESS;
 }
