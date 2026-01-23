@@ -11,6 +11,7 @@
 #include "franka_example_controllers/robot_utils.hpp"
 #include "franka_msgs/action/grasp.hpp"
 #include "franka_msgs/action/move.hpp"
+#include "custom_msgs/msg/joycon_command.hpp"
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -68,7 +69,7 @@ class GripperJoyconController : public controller_interface::ControllerInterface
 
  private:
   // Close Gripper if Open, Open Gripper if Closed
-  void toggleGripperState();
+  void toggleGripperState(bool gr_state);
   // Issues the Move Goal to open the Gripper
   bool openGripper();
   // Issues the Grasp Goal to close the Gripper around an object.
@@ -93,6 +94,13 @@ class GripperJoyconController : public controller_interface::ControllerInterface
 
   std::string arm_id_;
   std::string namespace_;
+
+  // topic subscriber: /joycon_command
+  rclcpp::Subscription<custom_msgs::msg::JoyconCommand>::SharedPtr joycon_command_subscriber_;
+  void joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg);
+  
+  bool gripper_state_{false};
+
 };
 
 }  // namespace franka_joycon_controller

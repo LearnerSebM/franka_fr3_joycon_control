@@ -9,6 +9,7 @@
 #include "franka_example_controllers/default_robot_behavior_utils.hpp"
 #include "franka_example_controllers/gripper_example_controller.hpp"
 #include "franka_joycon_controller/gripper_joycon_controller.hpp"
+#include "custom_msgs/msg/joycon_command.hpp"
 
 #define RED "\033[1;31m"
 #define GREEN "\033[1;32m"
@@ -52,6 +53,12 @@ CallbackReturn GripperJoyconController::on_configure(const rclcpp_lifecycle::Sta
 
   assignMoveGoalOptionsCallbacks();
   assignGraspGoalOptionsCallbacks();
+
+  // topic subscriber: /joycon_command
+  joycon_command_subscriber_ = get_node()->create_subscription<custom_msgs::msg::JoyconCommand>(
+      "joycon_command", 10,
+      std::bind(&GripperJoyconController::joyconCommandCallback, this, std::placeholders::_1));
+
   return nullptr != gripper_grasp_action_client_ && nullptr != gripper_move_action_client_ &&
                  nullptr != gripper_stop_client_
              ? CallbackReturn::SUCCESS
@@ -68,7 +75,7 @@ CallbackReturn GripperJoyconController::on_activate(const rclcpp_lifecycle::Stat
     return CallbackReturn::ERROR;
   }
   // Toggle the Gripper, initially we will order it to open
-  toggleGripperState();
+  toggleGripperState(true);
   return CallbackReturn::SUCCESS;
 }
 
@@ -110,8 +117,6 @@ void GripperJoyconController::assignMoveGoalOptionsCallbacks() {
   move_goal_options_.feedback_callback =
       [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Move>>&,
              const std::shared_ptr<const franka_msgs::action::Move_Feedback>& feedback) {
-        RCLCPP_INFO(get_node()->get_logger(), "Move Goal current_width [%f].",
-                    feedback->current_width);
       };
 
   move_goal_options_.result_callback =
@@ -120,9 +125,6 @@ void GripperJoyconController::assignMoveGoalOptionsCallbacks() {
         RCLCPP_INFO(get_node()->get_logger(), "Move Goal result %s.",
                     (rclcpp_action::ResultCode::SUCCEEDED == result.code ? YELLOW "SUCCESS" RESET
                                                                          : RED "FAIL" RESET));
-        if (rclcpp_action::ResultCode::SUCCEEDED == result.code) {
-          toggleGripperState();
-        }
       };
 }
 
@@ -140,8 +142,6 @@ void GripperJoyconController::assignGraspGoalOptionsCallbacks() {
   grasp_goal_options_.feedback_callback =
       [this](const std::shared_ptr<rclcpp_action::ClientGoalHandle<franka_msgs::action::Grasp>>&,
              const std::shared_ptr<const franka_msgs::action::Grasp_Feedback>& feedback) {
-        RCLCPP_INFO(get_node()->get_logger(), "Grasp Goal current_width: %f",
-                    feedback->current_width);
       };
 
   grasp_goal_options_.result_callback =
@@ -150,23 +150,25 @@ void GripperJoyconController::assignGraspGoalOptionsCallbacks() {
         RCLCPP_INFO(get_node()->get_logger(), "Grasp Goal result %s.",
                     (rclcpp_action::ResultCode::SUCCEEDED == result.code ? GREEN "SUCCESS" RESET
                                                                          : RED "FAIL" RESET));
-        toggleGripperState();
       };
 }
 
-void GripperJoyconController::toggleGripperState() {
-  /*
-   * Simply toggle the existing gripper state between open and closed.
-   */
-  enum ordered_state { open, closed };
-  static ordered_state ordered_gripper_state = ordered_state::closed;
+void GripperJoyconController::joyconCommandCallback(const custom_msgs::msg::JoyconCommand::SharedPtr msg) {
+  
+  if (gripper_state_ != msg->gripper_state) {
+    gripper_state_ = msg->gripper_state;
+    toggleGripperState(gripper_state_);
+  }
+}
 
-  if (ordered_gripper_state == ordered_state::closed) {
+void GripperJoyconController::toggleGripperState(bool gr_state) {
+  /*
+   * toggle the existing gripper state according to gripper_state_.
+   */
+  if (gr_state) {
     openGripper();
-    ordered_gripper_state = ordered_state::open;
   } else {
     graspGripper();
-    ordered_gripper_state = ordered_state::closed;
   }
 }
 
@@ -193,10 +195,6 @@ bool GripperJoyconController::openGripper() {
 void GripperJoyconController::graspGripper() {
   RCLCPP_INFO(get_node()->get_logger(), "Closing the gripper - Submitting a Grasp Goal");
 
-  // Arbitrary Goal - grasp a "Magic Marker"
-  // 15 mm anticipated width (diameter of cylinder)
-  // bic pen: 0.008 < 0.015 - 0.005  is a fail
-  // mini flashlight 0.30 > 0.015 + 0.010 is a fail
   franka_msgs::action::Grasp::Goal grasp_goal;
   grasp_goal.width = 0.015;
   grasp_goal.speed = 0.05;

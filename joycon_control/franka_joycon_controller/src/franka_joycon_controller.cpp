@@ -290,8 +290,6 @@ CallbackReturn FrankaJoyconController::on_configure(
   joycon_command_subscriber_ = get_node()->create_subscription<custom_msgs::msg::JoyconCommand>(
       "joycon_command", 10,
       std::bind(&FrankaJoyconController::joyconCommandCallback, this, std::placeholders::_1));
-  
-  RCLCPP_INFO(get_node()->get_logger(), "Joycon command subscriber created.");
 
   return CallbackReturn::SUCCESS;
 }

@@ -49,6 +49,7 @@ class JoyconPublisher(Node):
                 msg.header.frame_id = 'joycon_frame'
                 msg.x_cartesian = [float(x), float(y), float(z), 
                                    float(roll), float(pitch), float(yaw)]
+                msg.gripper_state = bool(gripper)
                 self.publisher_.publish(msg)
                 
         except Exception as e:
