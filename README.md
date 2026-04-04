@@ -10,6 +10,11 @@ Also install development tools:
 ~~~
 sudo apt install ros-dev-tools
 ~~~
+Then init ros dev tools:
+~~~
+sudo rosdep init
+rosdep update
+~~~
 
 2. Set Up a Workspace and Clone the Repo
 ~~~
@@ -62,7 +67,7 @@ make install
 If building for the first time:
 ~~~
 cd ../..  # cd to workspace path
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-skip joycon-robotics
 ~~~
 Otherwise just use normal colcon build.
 
