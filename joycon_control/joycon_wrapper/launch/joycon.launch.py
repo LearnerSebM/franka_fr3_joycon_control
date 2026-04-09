@@ -65,12 +65,16 @@ def generate_launch_description():
         ns = namespace if namespace.startswith('/') else f'/{namespace}'
         cmd.extend(['--ros-args', '-r', f'__ns:={ns}', '-r', '__node:=joycon_publisher'])
         
+        # to display buffered "print" logs in python scripts before Ctrl+C in the bash line 
+        node_env = os.environ.copy()
+        node_env['PYTHONUNBUFFERED'] = '1'
+        
         return [
             ExecuteProcess(
                 cmd=cmd,
                 name='joycon_publisher',
                 output='screen',
-                env=os.environ.copy(),
+                env=node_env,
             )
         ]
 

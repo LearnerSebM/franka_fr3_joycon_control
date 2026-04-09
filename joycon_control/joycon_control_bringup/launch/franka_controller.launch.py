@@ -107,7 +107,7 @@ def generate_robot_nodes(context):
                 namespace=namespace,
                 parameters=[{
                     'namespace': namespace,
-                    'old_controller': 'robot_reset_controller',
+                    'reset_controller': 'robot_reset_controller',
                     'new_controller': controller_name,
                     'check_time': 0.5,
                 }],
