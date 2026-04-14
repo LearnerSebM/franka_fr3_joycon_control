@@ -25,28 +25,18 @@ def generate_launch_description():
 
         # use python in conda environment to run joycon_publisher
         # get python path in conda environment
-        conda_env_path = os.environ.get('CONDA_PREFIX', '')
-        if conda_env_path:
-            python_executable = os.path.join(conda_env_path, 'bin', 'python')
-        else:
-            # if conda environment is not activated, try using common conda environment paths
-            conda_base = os.environ.get('CONDA_DEFAULT_ENV', 'joycon')
-            possible_paths = [
-                os.path.expanduser(f'~/Tools/miniforge3/envs/{conda_base}/bin/python'),
-                os.path.expanduser(f'~/anaconda3/envs/{conda_base}/bin/python'),
-                os.path.expanduser(f'~/miniconda3/envs/{conda_base}/bin/python'),
-            ]
-            python_executable = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    python_executable = path
-                    break
-            
-            if python_executable is None:
-                # if not found, fallback to system Python, but will show warning
-                python_executable = '/usr/bin/python3'
-                print(f"Warning: conda environment not found, using system Python: {python_executable}")
-        
+        conda_env_path = os.environ.get('CONDA_PREFIX', '').strip()
+        if not conda_env_path:
+            raise RuntimeError(
+                'CONDA_PREFIX is not set. Activate your conda environment first '
+                '(e.g. `conda activate joycon`) before running this launch file.'
+            )
+        python_executable = os.path.join(conda_env_path, 'bin', 'python')
+        if not os.path.isfile(python_executable):
+            raise FileNotFoundError(
+                f'Expected conda Python at {python_executable} but it does not exist.'
+            )
+
 
         from ament_index_python.packages import get_package_share_directory
         joycon_wrapper_share = get_package_share_directory('joycon_wrapper')
