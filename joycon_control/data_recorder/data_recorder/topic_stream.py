@@ -1,0 +1,171 @@
+from __future__ import annotations
+
+import threading
+from dataclasses import dataclass
+from typing import List, Tuple
+
+import numpy as np
+from sensor_msgs.msg import JointState
+
+
+def _stamp_to_ns(stamp) -> int:
+    return int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+
+
+@dataclass
+class JointStateSnapshot:
+    """Arrays for HDF5 export; only the first valid_count rows are from this session."""
+
+    joint_names: List[str]
+    t_ros_ns: np.ndarray
+    position: np.ndarray
+    velocity: np.ndarray
+    effort: np.ndarray
+    valid_count: int
+    head: int
+
+
+class TopicStream:
+    """
+    Holds latest JointState from subscription; when recording, each timer tick appends
+    one sample to a fixed-capacity ring (oldest overwritten when full).
+    """
+
+    def __init__(self, capacity: int = 1000) -> None:
+        self._capacity = max(1, int(capacity))
+        self._lock = threading.Lock()
+        self._latest: JointState | None = None
+        self._recording = False
+        self._joint_dim = 0
+        self._names: List[str] = []
+        self._t_ros: np.ndarray | None = None
+        self._pos: np.ndarray | None = None
+        self._vel: np.ndarray | None = None
+        self._eff: np.ndarray | None = None
+        self._count = 0
+        self._head = 0
+
+    @property
+    def capacity(self) -> int:
+        return self._capacity
+
+    @property
+    def is_recording(self) -> bool:
+        return self._recording
+
+    def set_latest(self, msg: JointState) -> None:
+        with self._lock:
+            self._latest = msg
+
+    def get_latest(self) -> JointState | None:
+        with self._lock:
+            return self._latest
+
+    def begin_recording(self) -> None:
+        with self._lock:
+            self._recording = True
+            self._count = 0
+            self._head = 0
+            self._joint_dim = 0
+            self._names = []
+            self._t_ros = None
+            self._pos = None
+            self._vel = None
+            self._eff = None
+
+    def end_recording(self) -> None:
+        with self._lock:
+            self._recording = False
+
+    def clear_storage(self) -> None:
+        """Free ring buffers after discard or commit; do not toggle _recording."""
+        with self._lock:
+            self._count = 0
+            self._head = 0
+            self._joint_dim = 0
+            self._names = []
+            self._t_ros = None
+            self._pos = None
+            self._vel = None
+            self._eff = None
+
+    def on_sample_tick(self) -> None:
+        """
+        Called by data_recorder at sample_hz while recording;
+        uses latest JointState if available.
+        """
+        with self._lock:
+            if not self._recording:
+                return
+            msg = self._latest
+            if msg is None:
+                return
+            self._allocate_buffers(len(msg.name))
+            assert self._t_ros is not None and self._pos is not None
+            self._names = list(msg.name)
+            idx = self._head
+            self._t_ros[idx] = _stamp_to_ns(msg.header.stamp)
+            pos, vel, eff = self._fixed_rows(msg)
+            self._pos[idx] = pos
+            self._vel[idx] = vel
+            self._eff[idx] = eff
+            self._head = (self._head + 1) % self._capacity
+            self._count += 1
+
+    def _allocate_buffers(self, n_joint: int) -> None:
+        if self._joint_dim == n_joint and self._t_ros is not None:
+            # buffer already allocated
+            return
+        self._joint_dim = n_joint
+        self._t_ros = np.zeros(self._capacity, dtype=np.int64)
+        self._pos = np.zeros((self._capacity, n_joint), dtype=np.float64)
+        self._vel = np.zeros((self._capacity, n_joint), dtype=np.float64)
+        self._eff = np.zeros((self._capacity, n_joint), dtype=np.float64)
+
+    # TODO: a little bit strange here, could be redundant
+    def _fixed_rows(self, msg: JointState) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        d = self._joint_dim
+
+        def row(arr: List[float]) -> np.ndarray:
+            x = np.asarray(arr, dtype=np.float64)
+            out = np.zeros((d,), dtype=np.float64)
+            n = min(d, x.size)
+            if n > 0:
+                out[:n] = x[:n]
+            return out
+
+        return row(list(msg.position)), row(list(msg.velocity)), row(list(msg.effort))
+
+    # TODO: check with custom hdf5 structure
+    def get_snapshot_for_hdf5(self) -> JointStateSnapshot | None:
+        """
+        Oldest-to-newest order for min(count, capacity) samples.
+        Safe to call after end_recording (buffers retained until begin_recording).
+        """
+        with self._lock:
+            if self._t_ros is None or self._pos is None or self._joint_dim == 0:
+                return None
+            n = min(self._count, self._capacity)
+            if n == 0:
+                return JointStateSnapshot(
+                    joint_names=list(self._names),
+                    t_ros_ns=np.zeros(0, dtype=np.int64),
+                    position=np.zeros((0, self._joint_dim), dtype=np.float64),
+                    velocity=np.zeros((0, self._joint_dim), dtype=np.float64),
+                    effort=np.zeros((0, self._joint_dim), dtype=np.float64),
+                    valid_count=0,
+                    head=self._head,
+                )
+            if self._count < self._capacity:
+                indices = np.arange(n, dtype=np.int64)
+            else:
+                indices = (self._head + np.arange(n, dtype=np.int64)) % self._capacity
+            return JointStateSnapshot(
+                joint_names=list(self._names),
+                t_ros_ns=self._t_ros[indices].copy(),
+                position=self._pos[indices].copy(),
+                velocity=self._vel[indices].copy(),
+                effort=self._eff[indices].copy(),
+                valid_count=int(n),
+                head=self._head,
+            )
