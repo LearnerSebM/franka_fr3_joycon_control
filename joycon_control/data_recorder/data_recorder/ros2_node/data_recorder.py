@@ -36,6 +36,7 @@ class DataRecorderNode(Node):
         self.declare_parameter("ring_capacity", 1000)
         self.declare_parameter("output_directory", os.path.expanduser("~/joycon_recordings"))
         self.declare_parameter("file_prefix", "recording")
+        self.declare_parameter("camera_placeholder_serial", "camera_placeholder")
 
         ns = self.get_parameter("namespace").get_parameter_value().string_value.strip().strip("/")
         sample_hz = self.get_parameter("sample_hz").get_parameter_value().double_value
@@ -44,6 +45,10 @@ class DataRecorderNode(Node):
             self.get_parameter("output_directory").get_parameter_value().string_value
         )
         self._file_prefix = self.get_parameter("file_prefix").get_parameter_value().string_value
+        self._camera_placeholder_serial = (
+            self.get_parameter("camera_placeholder_serial").get_parameter_value().string_value.strip()
+            or "camera_placeholder"
+        )
 
         self._joint_topic = f"/{ns}/joint_states"
         self._button_topic = f"/{ns}/joycon_data_buttons"
@@ -92,10 +97,14 @@ class DataRecorderNode(Node):
             return
         self._topic_stream.on_sample_tick()
 
-    def _make_output_path(self) -> str:
-        os.makedirs(self._output_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(self._output_dir, f"{self._file_prefix}_{ts}.h5")
+    def _make_output_path(self, outcome: str) -> str:
+        # DROID-like episode layout: <output>/<outcome>/<day>/<episode>/trajectory.h5
+        now = datetime.now()
+        day = now.strftime("%Y-%m-%d")
+        episode = f"{self._file_prefix}_{now.strftime('%a_%b_%d_%H-%M-%S_%Y')}"
+        folder = os.path.join(self._output_dir, outcome, day, episode)
+        os.makedirs(folder, exist_ok=True)
+        return os.path.join(folder, "trajectory.h5")
 
     def _handle_start(self, _req: Trigger.Request, resp: Trigger.Response) -> Trigger.Response:
         action = self._session.handle_button_edge(BUTTON_X)
@@ -169,8 +178,7 @@ class DataRecorderNode(Node):
                 f"Trajectory committed as success.\n"
                 f"{follow}"
             )
-            # TODO: work from _commit_trajectory()
-            # self._commit_trajectory("success")
+            self._commit_trajectory("success")
             return
         if action == RecorderAction.COMMIT_FAILURE:
             follow = (
@@ -183,7 +191,7 @@ class DataRecorderNode(Node):
                 f"Trajectory committed as failure.\n"
                 f"{follow}"
             )
-            # self._commit_trajectory("failure")
+            self._commit_trajectory("failure")
             return
         if action == RecorderAction.ARM_RESET_ACK:
             # X => Y => A/B => +
@@ -194,7 +202,7 @@ class DataRecorderNode(Node):
             return
 
     def _commit_trajectory(self, outcome: str) -> None:
-        path = self._make_output_path()
+        path = self._make_output_path(outcome)
         self._last_written_path = path
         snap = self._topic_stream.get_snapshot_for_hdf5()
         if snap is None:
@@ -208,7 +216,17 @@ class DataRecorderNode(Node):
                 0,
             )
             self.get_logger().warning("Commit: no ring layout; writing placeholder HDF5")
-        write_recording(path, snap, trajectory_outcome=outcome)
+        write_recording(
+            path,
+            snap,
+            trajectory_outcome=outcome,
+            # TODO: should have 2 camera serial numbers, check structure after integrating camera pipeline
+            camera_serials=(self._camera_placeholder_serial,),
+            metadata={
+                "source": "franka_fr3_joycon_control",
+                "outcome": outcome,
+            },
+        )
         self._topic_stream.clear_storage()
         self.get_logger().info(
             f"Wrote HDF5 outcome={outcome}: {path} (samples={snap.valid_count})"

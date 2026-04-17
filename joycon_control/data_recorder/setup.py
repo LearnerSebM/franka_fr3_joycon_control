@@ -26,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "data_recorder = data_recorder.ros2_node.data_recorder:main",
+            "replay_trajectory = data_recorder.ros2_node.replay_trajectory:main",
         ],
     },
 )
