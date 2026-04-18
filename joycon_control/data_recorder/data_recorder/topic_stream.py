@@ -105,7 +105,7 @@ class TopicStream:
             self._names = list(msg.name)
             idx = self._head
             self._t_ros[idx] = _stamp_to_ns(msg.header.stamp)
-            pos, vel, eff = self._fixed_rows(msg)
+            pos, vel, eff = self._unpack_msg(msg)
             self._pos[idx] = pos
             self._vel[idx] = vel
             self._eff[idx] = eff
@@ -122,8 +122,7 @@ class TopicStream:
         self._vel = np.zeros((self._capacity, n_joint), dtype=np.float64)
         self._eff = np.zeros((self._capacity, n_joint), dtype=np.float64)
 
-    # TODO: a little bit strange here, could be redundant
-    def _fixed_rows(self, msg: JointState) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _unpack_msg(self, msg: JointState) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         d = self._joint_dim
 
         def row(arr: List[float]) -> np.ndarray:
@@ -136,8 +135,7 @@ class TopicStream:
 
         return row(list(msg.position)), row(list(msg.velocity)), row(list(msg.effort))
 
-    # TODO: check with custom hdf5 structure
-    def get_snapshot_for_hdf5(self) -> JointStateSnapshot | None:
+    def pack_snapshot(self) -> JointStateSnapshot | None:
         """
         Oldest-to-newest order for min(count, capacity) samples.
         Safe to call after end_recording (buffers retained until begin_recording).

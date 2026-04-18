@@ -33,7 +33,7 @@ def _ensure_width(arr: np.ndarray, width: int) -> np.ndarray:
     return np.concatenate((arr, pad), axis=1)
 
 
-def _select_arm_and_gripper(snapshot: "JointStateSnapshot", n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _extract_snapshot(snapshot: "JointStateSnapshot", n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     joint_names = [name.lower() for name in snapshot.joint_names]
     pos = _as_float64_array(snapshot.position, n)
     vel = _as_float64_array(snapshot.velocity, n)
@@ -52,13 +52,17 @@ def _select_arm_and_gripper(snapshot: "JointStateSnapshot", n: int) -> tuple[np.
     arm_vel = _ensure_width(vel[:, arm_indices], 7)
 
     if gripper_indices:
+        # in our case, there are 2 gripper joints (finger_left and finger_right) in equal position
+        # so gripper_position is the average of the two gripper joints
         gripper_position = np.mean(pos[:, gripper_indices], axis=1)
     elif pos.shape[1] > 7:
         gripper_position = pos[:, 7]
     else:
         gripper_position = pos[:, -1]
 
-    return arm_pos, arm_vel, np.asarray(gripper_position, dtype=np.float64)
+    # gripper width should be two times of finger position (to align with policy inference)
+    gripper_width = np.asarray(gripper_position, dtype=np.float64) * 2.0
+    return arm_pos, arm_vel, gripper_width
 
 
 def _make_droid_payload(
@@ -66,7 +70,7 @@ def _make_droid_payload(
     n: int,
     camera_serials: Sequence[str],
 ) -> Mapping[str, Any]:
-    arm_pos, arm_vel, gripper_pos = _select_arm_and_gripper(snapshot, n)
+    arm_pos, arm_vel, gripper_pos = _extract_snapshot(snapshot, n)
     t_ros = np.asarray(snapshot.t_ros_ns[:n], dtype=np.int64)
     movement_enabled = np.ones((n,), dtype=np.bool_)
 

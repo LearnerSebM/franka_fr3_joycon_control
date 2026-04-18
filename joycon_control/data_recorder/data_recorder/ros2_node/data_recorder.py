@@ -204,7 +204,7 @@ class DataRecorderNode(Node):
     def _commit_trajectory(self, outcome: str) -> None:
         path = self._make_output_path(outcome)
         self._last_written_path = path
-        snap = self._topic_stream.get_snapshot_for_hdf5()
+        snap = self._topic_stream.pack_snapshot()
         if snap is None:
             snap = JointStateSnapshot(
                 [],
