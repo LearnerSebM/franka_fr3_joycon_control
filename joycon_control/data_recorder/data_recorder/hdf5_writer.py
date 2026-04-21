@@ -3,6 +3,7 @@ from __future__ import annotations
 """Write one DROID-style trajectory.h5 from a joint-state snapshot."""
 
 import os
+import warnings
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence
 
 import numpy as np
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
 
 
 SCHEMA_VERSION = 1
+# DROID uses normalized gripper close amount:
+# gripper_position = 1 - width / max_width, where 0=open and 1=closed.
+FRANKA_HAND_TRAVEL_RANGE = 0.08
 
 
 def _as_float64_array(values: np.ndarray, n: int) -> np.ndarray:
@@ -35,6 +39,16 @@ def _ensure_width(arr: np.ndarray, width: int) -> np.ndarray:
     return np.concatenate((arr, pad), axis=1)
 
 
+def _width_to_droid_gripper_position(
+    width: np.ndarray, max_width: float = FRANKA_HAND_TRAVEL_RANGE
+) -> np.ndarray:
+    width_arr = np.asarray(width, dtype=np.float64)
+    safe_max_width = max(float(max_width), 1e-9)
+    normalized_width = np.clip(width_arr / safe_max_width, 0.0, 1.0)
+    # DROID convention: 0=open, 1=closed.
+    return 1.0 - normalized_width
+
+
 def _unpack_snapshot(snapshot: "JointStateSnapshot", n: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     joint_names = [name.lower() for name in snapshot.joint_names]
@@ -44,8 +58,7 @@ def _unpack_snapshot(snapshot: "JointStateSnapshot", n: int
     if pos.shape[1] == 0:
         return np.zeros((n, 7), dtype=np.float64), np.zeros((n, 7), dtype=np.float64), np.zeros((n,), dtype=np.float64)
 
-    # in our case, there are 2 gripper joints (finger_left and finger_right) in equal position
-    # so gripper_position is the average of the two gripper joints
+    # Use joint names to separate arm joints and gripper joints when available.
     gripper_indices = [i for i, name in enumerate(joint_names) if ("gripper" in name or "finger" in name)]
     arm_indices = [i for i in range(pos.shape[1]) if i not in gripper_indices]
 
@@ -56,16 +69,21 @@ def _unpack_snapshot(snapshot: "JointStateSnapshot", n: int
     arm_pos = _ensure_width(pos[:, arm_indices], 7)
     arm_vel = _ensure_width(vel[:, arm_indices], 7)
 
-    if gripper_indices:
-        gripper_position = np.mean(pos[:, gripper_indices], axis=1)
-    elif pos.shape[1] > 7:
-        gripper_position = pos[:, 7]
+    if len(gripper_indices) >= 2:
+        # For mirrored finger joints, width ~= 2 * mean(finger_positions).
+        gripper_width = 2.0 * np.mean(pos[:, gripper_indices], axis=1)
+    elif len(gripper_indices) == 1:
+        gripper_width = 2.0 * pos[:, gripper_indices[0]]
     else:
-        gripper_position = pos[:, -1]
+        warnings.warn(
+            "Could not identify gripper joint reliably; using last joint column as fallback gripper joint.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        gripper_width = 2.0 * pos[:, -1]
 
-    # gripper width should be two times of finger position (to align with policy inference)
-    gripper_width = np.asarray(gripper_position, dtype=np.float64) * 2.0
-    return arm_pos, arm_vel, gripper_width
+    gripper_position = _width_to_droid_gripper_position(gripper_width)
+    return arm_pos, arm_vel, gripper_position
 
 
 def _normalize_camera_info(
@@ -104,6 +122,8 @@ def _make_droid_payload(
     n: int,
     camera_info: Optional[Mapping[str, Mapping[str, Any]]],
 ) -> Mapping[str, Any]:
+    # DROID convention: gripper_position is normalized close amount in [0, 1]
+    # (0=open, 1=closed), not raw physical width.
     arm_pos, arm_vel, gripper_pos = _unpack_snapshot(snapshot, n)
     t_ros = np.asarray(snapshot.t_ros_ns[:n], dtype=np.int64)
     movement_enabled = np.ones((n,), dtype=np.bool_)

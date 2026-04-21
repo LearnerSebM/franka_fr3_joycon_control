@@ -93,3 +93,10 @@ ros2 launch joycon_control_bringup joycon_ik_controller.launch.py
 ~~~
 
 The robot will reset its position first and then receive command from joycon. 
+
+If you need to use data_recorder to automatically collect custom dataset, open another integrated terminal and run following commands after the joycon and franka controller are launched.  
+~~~
+source install/setup.bash
+ros2 launch data_recorder data_recorder.launch.py 
+~~~
+Please note that this should be lauched using certain virtual environment, and the datails are coming soon.
