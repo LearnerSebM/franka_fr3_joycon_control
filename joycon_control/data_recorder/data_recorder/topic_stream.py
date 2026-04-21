@@ -14,7 +14,9 @@ def _stamp_to_ns(stamp) -> int:
 
 @dataclass
 class JointStateSnapshot:
-    """Arrays for HDF5 export; only the first valid_count rows are from this session."""
+    """
+    arrays for HDF5 export
+    """
 
     joint_names: List[str]
     t_ros_ns: np.ndarray
@@ -78,7 +80,10 @@ class TopicStream:
             self._recording = False
 
     def clear_storage(self) -> None:
-        """Free ring buffers after discard or commit; do not toggle _recording."""
+        """
+        Clear ring buffers after discard or commit; 
+        does not change _recording state.
+        """
         with self._lock:
             self._count = 0
             self._head = 0
@@ -89,28 +94,33 @@ class TopicStream:
             self._vel = None
             self._eff = None
 
-    def on_sample_tick(self) -> None:
+    def try_sample_tick(self) -> int | None:
         """
         Called by data_recorder at sample_hz while recording;
         uses latest JointState if available.
+        Returns ``None`` when the stream is not recording or when no
+        JointState message has been observed yet, otherwise returns msg timestamp. 
+        Callers can use the returned timestamp to align other per-tick streams (cameras).
         """
         with self._lock:
             if not self._recording:
-                return
+                return None
             msg = self._latest
             if msg is None:
-                return
+                return None
             self._allocate_buffers(len(msg.name))
             assert self._t_ros is not None and self._pos is not None
             self._names = list(msg.name)
             idx = self._head
-            self._t_ros[idx] = _stamp_to_ns(msg.header.stamp)
+            t_ros_ns = _stamp_to_ns(msg.header.stamp)
+            self._t_ros[idx] = t_ros_ns
             pos, vel, eff = self._unpack_msg(msg)
             self._pos[idx] = pos
             self._vel[idx] = vel
             self._eff[idx] = eff
             self._head = (self._head + 1) % self._capacity
             self._count += 1
+            return int(t_ros_ns)
 
     def _allocate_buffers(self, n_joint: int) -> None:
         if self._joint_dim == n_joint and self._t_ros is not None:
