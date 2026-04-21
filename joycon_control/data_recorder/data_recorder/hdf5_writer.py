@@ -44,6 +44,8 @@ def _unpack_snapshot(snapshot: "JointStateSnapshot", n: int
     if pos.shape[1] == 0:
         return np.zeros((n, 7), dtype=np.float64), np.zeros((n, 7), dtype=np.float64), np.zeros((n,), dtype=np.float64)
 
+    # in our case, there are 2 gripper joints (finger_left and finger_right) in equal position
+    # so gripper_position is the average of the two gripper joints
     gripper_indices = [i for i, name in enumerate(joint_names) if ("gripper" in name or "finger" in name)]
     arm_indices = [i for i in range(pos.shape[1]) if i not in gripper_indices]
 
@@ -61,7 +63,9 @@ def _unpack_snapshot(snapshot: "JointStateSnapshot", n: int
     else:
         gripper_position = pos[:, -1]
 
-    return arm_pos, arm_vel, np.asarray(gripper_position, dtype=np.float64)
+    # gripper width should be two times of finger position (to align with policy inference)
+    gripper_width = np.asarray(gripper_position, dtype=np.float64) * 2.0
+    return arm_pos, arm_vel, gripper_width
 
 
 def _normalize_camera_info(
