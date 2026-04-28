@@ -345,7 +345,7 @@ class DataRecorderNode(Node):
                 0,
                 0,
             )
-            self.get_logger().warning("Commit: no ring layout; writing placeholder HDF5")
+            self.get_logger().warning("Commit: no queued samples; writing placeholder HDF5")
 
         camera_info: Dict[str, Dict[str, Any]] = {}
         frame_count = 0

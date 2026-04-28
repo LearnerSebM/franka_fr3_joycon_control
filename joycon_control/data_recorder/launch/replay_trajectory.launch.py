@@ -3,6 +3,10 @@ Launch replay_trajectory with the **franka_data** conda Python (or the env named
 
 Requires ``conda activate <conda_env>`` before ``ros2 launch`` so ``CONDA_PREFIX`` points
 at that environment (same pattern as ``data_recorder.launch.py``).
+
+usage:
+ros2 launch data_recorder replay_traj
+ectory.launch.py trajectory_h5:=<path to hdf5 file>/XXXX.h5
 """
 
 import os

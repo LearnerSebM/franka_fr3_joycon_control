@@ -29,8 +29,8 @@ class JointStateSnapshot:
 
 class TopicStream:
     """
-    Holds latest JointState from subscription; when recording, each timer tick appends
-    one sample to a fixed-capacity ring (oldest overwritten when full).
+    holds latest JointState from subscription; when recording, each timer tick appends
+    one sample to a fixed-capacity queue (oldest dropped when full).
     """
 
     def __init__(self, capacity: int = 1000) -> None:
@@ -45,7 +45,6 @@ class TopicStream:
         self._vel: np.ndarray | None = None
         self._eff: np.ndarray | None = None
         self._count = 0
-        self._head = 0
 
     @property
     def capacity(self) -> int:
@@ -67,7 +66,6 @@ class TopicStream:
         with self._lock:
             self._recording = True
             self._count = 0
-            self._head = 0
             self._joint_dim = 0
             self._names = []
             self._t_ros = None
@@ -81,12 +79,11 @@ class TopicStream:
 
     def clear_storage(self) -> None:
         """
-        Clear ring buffers after discard or commit; 
+        clear queued samples after discard or commit;
         does not change _recording state.
         """
         with self._lock:
             self._count = 0
-            self._head = 0
             self._joint_dim = 0
             self._names = []
             self._t_ros = None
@@ -99,7 +96,7 @@ class TopicStream:
         Called by data_recorder at sample_hz while recording;
         uses latest JointState if available.
         Returns ``None`` when the stream is not recording or when no
-        JointState message has been observed yet, otherwise returns msg timestamp. 
+        JointState message has been observed yet, otherwise returns msg timestamp.
         Callers can use the returned timestamp to align other per-tick streams (cameras).
         """
         with self._lock:
@@ -111,15 +108,21 @@ class TopicStream:
             self._allocate_buffers(len(msg.name))
             assert self._t_ros is not None and self._pos is not None
             self._names = list(msg.name)
-            idx = self._head
             t_ros_ns = _stamp_to_ns(msg.header.stamp)
-            self._t_ros[idx] = t_ros_ns
             pos, vel, eff = self._unpack_msg(msg)
+            if self._count < self._capacity:
+                idx = self._count
+                self._count += 1
+            else:
+                self._t_ros[:-1] = self._t_ros[1:]
+                self._pos[:-1] = self._pos[1:]
+                self._vel[:-1] = self._vel[1:]
+                self._eff[:-1] = self._eff[1:]
+                idx = self._capacity - 1
+            self._t_ros[idx] = t_ros_ns
             self._pos[idx] = pos
             self._vel[idx] = vel
             self._eff[idx] = eff
-            self._head = (self._head + 1) % self._capacity
-            self._count += 1
             return int(t_ros_ns)
 
     def _allocate_buffers(self, n_joint: int) -> None:
@@ -147,7 +150,7 @@ class TopicStream:
 
     def pack_snapshot(self) -> JointStateSnapshot | None:
         """
-        Oldest-to-newest order for min(count, capacity) samples.
+        Queued oldest-to-newest order for min(count, capacity) samples.
         Safe to call after end_recording (buffers retained until begin_recording).
         """
         with self._lock:
@@ -162,18 +165,14 @@ class TopicStream:
                     velocity=np.zeros((0, self._joint_dim), dtype=np.float64),
                     effort=np.zeros((0, self._joint_dim), dtype=np.float64),
                     valid_count=0,
-                    head=self._head,
+                    head=0,
                 )
-            if self._count < self._capacity:
-                indices = np.arange(n, dtype=np.int64)
-            else:
-                indices = (self._head + np.arange(n, dtype=np.int64)) % self._capacity
             return JointStateSnapshot(
                 joint_names=list(self._names),
-                t_ros_ns=self._t_ros[indices].copy(),
-                position=self._pos[indices].copy(),
-                velocity=self._vel[indices].copy(),
-                effort=self._eff[indices].copy(),
+                t_ros_ns=self._t_ros[:n].copy(),
+                position=self._pos[:n].copy(),
+                velocity=self._vel[:n].copy(),
+                effort=self._eff[:n].copy(),
                 valid_count=int(n),
-                head=self._head,
+                head=0,
             )
