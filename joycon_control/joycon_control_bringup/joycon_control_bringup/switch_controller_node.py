@@ -7,7 +7,6 @@ from std_msgs.msg import String
 from controller_manager_msgs.srv import SwitchController, LoadController, ConfigureController
 from custom_msgs.msg import JoyconCommand
 from builtin_interfaces.msg import Duration
-import time
 
 
 class SwitchControllerNode(Node):
@@ -155,7 +154,6 @@ class SwitchControllerNode(Node):
 
         if rsp.success:
             self.get_logger().info(f'Reset completed (message: {rsp.message}), switching back to target controller')
-            time.sleep(1.0)
             if self.state == self.STATE_WAIT_RESET_DONE_STARTUP:
                 # initial startup: franka_joycon_controller not loaded/configured yet.
                 self.publish_phase(self.PHASE_SWITCHING_TO_TELEOP)
