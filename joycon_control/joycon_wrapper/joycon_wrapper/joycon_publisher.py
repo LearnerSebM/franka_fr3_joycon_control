@@ -64,6 +64,8 @@ class JoyconPublisher(Node):
         self.pending_bias_reset = False         # refer to comments in phase_callback function
         self.hold_translation = False           # refer to comments in phase_callback function
         self.last_xyz_cmd = [0.0, 0.0, 0.0]
+        self.current_phase = ''
+        self.yaw_offset_bias = 0.0
 
         self._cb_group_cmd = MutuallyExclusiveCallbackGroup()
         self._cb_group_btn = MutuallyExclusiveCallbackGroup()
@@ -107,6 +109,7 @@ class JoyconPublisher(Node):
 
     def phase_callback(self, msg):
         phase = msg.data
+        self.current_phase = phase
         if phase == self.PHASE_SWITCHING_TO_RESET:
             # hold_translation: freeze xyz output at last command when switch_controller_node receives
             # reset robot request but is still switching to reset_controller.
@@ -148,6 +151,10 @@ class JoyconPublisher(Node):
                     self.position_bias = [float(x), float(y), float(z)]
                     self.pending_bias_reset = False
 
+                if self.current_phase == self.PHASE_IN_RESET:
+                    # Keep yaw baseline updated continuously while robot is in reset mode.
+                    self.yaw_offset_bias = float(yaw)
+
                 x_cmd = float(x) - self.position_bias[0]
                 y_cmd = float(y) - self.position_bias[1]
                 z_cmd = float(z) - self.position_bias[2]
@@ -156,8 +163,9 @@ class JoyconPublisher(Node):
                 else:
                     self.last_xyz_cmd = [x_cmd, y_cmd, z_cmd]
 
+                yaw_cmd = float(yaw) - self.yaw_offset_bias
                 msg.x_cartesian = [x_cmd, y_cmd, z_cmd,
-                                   float(roll), float(pitch), float(yaw)]
+                                   float(roll), float(pitch), yaw_cmd]
                 msg.gripper_state = bool(gripper)
 
                 self.last_reset_request = msg.reset_request
